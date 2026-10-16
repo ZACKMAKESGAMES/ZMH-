@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R&amp;CS Copy Hub</title>
+<style>
+:root{--bg:#000;--panel:#0c0c0c;--line:#1a1a1a;--text:#fff;--mut:#8a8a8a;--blue:#1e90ff;--green:#22c55e;--purple:#a855f7;--discord:#5865f2}
+*{box-sizing:border-box;cursor:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif}
+a,button{font-family:inherit}
+header{display:flex;justify-content:space-between;align-items:center;padding:24px 44px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap}
+.logo{font-size:2rem;font-weight:800;letter-spacing:1px;background:linear-gradient(90deg,#1e90ff,#0a3ba8);-webkit-background-clip:text;background-clip:text;color:transparent;font-family:"Trebuchet MS",sans-serif}
+nav{display:flex;gap:12px;align-items:center;position:relative}
+.btn,.pill{background:var(--bg);color:#fff;border:1px solid #222;border-radius:10px;padding:12px 22px;font-weight:700;font-size:1rem;transition:.15s}
+.pill{border-radius:99px;padding:7px 14px;font-weight:400;font-size:.95rem;display:flex;align-items:center;gap:8px}
+.btn:hover{border-color:#444}
+.btn.active{color:var(--blue);border-color:#fff;box-shadow:0 0 0 2px #0a2a55}
+.btn.active.unity{border-color:var(--blue);box-shadow:none}
+.av{width:30px;height:30px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-weight:700;font-size:.8rem}
+.menu{position:absolute;right:0;top:62px;width:230px;background:#0b0b0b;border:1px solid #222;border-radius:14px;padding:8px;display:none;z-index:50}
+.menu.open{display:block}
+.menu button{display:block;width:100%;text-align:left;background:#0d0d0d;border:1px solid #2a1a1a;border-radius:12px;padding:14px;margin:6px 0;font-weight:700;font-size:1rem}
+main{max-width:1500px;margin:0 auto;padding:46px 72px;min-height:520px}
+h1{margin:0 0 20px;font-size:2.1rem;padding-left:18px;border-left:4px solid var(--blue);line-height:1.1}
+.apk h1{border-color:var(--green)}.unity-p h1{border-color:var(--purple)}
+.lead{color:var(--mut);font-size:1.35rem;line-height:1.85;max-width:1050px}
+.card-box{margin-top:60px;border:1px solid #1d1d1d;border-radius:26px;padding:50px 20px;text-align:center}
+.card-box h2{margin:0 0 14px;font-size:1.7rem}.card-box p{color:#bbb;margin:0 0 20px}
+.dbtn{background:var(--discord);color:#fff;border:0;border-radius:10px;padding:16px 38px;font-size:1.3rem;font-weight:700;text-decoration:none;display:inline-flex;gap:8px;align-items:center}
+.layout{display:flex;gap:38px;margin-top:30px}
+.side{width:272px;flex:none;border-right:1px solid var(--line);padding-right:28px;display:flex;flex-direction:column;gap:10px}
+.tab{background:var(--bg);border:1px solid #222;border-radius:10px;padding:16px 20px;color:#bbb;font-weight:700;font-size:1.05rem;text-align:left}
+.apk .tab.on{color:var(--green);border-color:var(--green);background:#04120a}
+.unity-p .tab.on{color:var(--purple);border-color:var(--purple);background:#10051c}
+.content{flex:1;min-width:0}
+.bar{display:flex;gap:16px;align-items:center}
+.bar input,.bar select,.f input,.f select,.f textarea{background:#0b0b0b;border:1px solid #1d1d1d;border-radius:12px;color:#fff;padding:18px;font-size:1.05rem;font-family:inherit;outline:none}
+.bar input{flex:1}.bar select{padding:18px 14px}
+.count{color:var(--mut);font-size:.95rem;white-space:nowrap}
+.empty{margin-top:30px;border:1px dashed #1d1d1d;border-radius:18px;padding:55px;text-align:center;color:#555;font-style:italic;font-size:1.3rem}
+.grid{margin-top:30px;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,320px));gap:22px}
+.item{background:#0b0b0b;border:1px solid #1d1d1d;border-radius:18px;overflow:hidden;transition:.15s}
+.item:hover{border-color:#444;transform:translateY(-2px)}
+.thumb{height:210px;background:#000;display:grid;place-items:center;color:#333;font-size:3rem}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.item .t{padding:16px 18px;background:#0e0e0e;font-size:1.05rem}
+footer{border-top:1px solid var(--line);text-align:center;color:#555;padding:48px}
+.splash{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;transition:opacity .6s}
+.splash h1{border:0;padding:0;font-size:3.4rem;font-weight:800;background:linear-gradient(90deg,#1e90ff,#0a3ba8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.splash p{color:var(--mut);font-size:1.3rem}.splash b{color:#3b9cff;letter-spacing:1px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:none;place-items:center;padding:20px}
+.ov.open{display:grid}
+.modal{background:#0d0d0d;border:1px solid #222;border-radius:24px;padding:42px 40px;width:min(720px,100%);text-align:center;max-height:92vh;overflow:auto}
+.modal h3{margin:0 0 14px;font-size:1.7rem}.modal p{color:#bbb}
+.modal input,.modal select,.modal textarea{width:100%;background:#000;border:1px solid #222;border-radius:12px;color:#fff;padding:17px;font-size:1.05rem;margin:8px 0;font-family:inherit}
+.mbtn{width:100%;border:0;border-radius:10px;padding:18px;font-size:1.15rem;font-weight:700;color:#fff;background:linear-gradient(90deg,#1e90ff,#0a3ba8);margin-top:10px}
+.mbtn.alt{background:#1a1a1a}
+.or{color:#666;margin:18px 0 6px}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #333;border-radius:12px;padding:12px 22px;z-index:300;display:none}
+#cur{position:fixed;left:0;top:0;width:60px;height:60px;border-radius:50%;pointer-events:none;z-index:9999;margin:-30px 0 0 -30px;
+background:radial-gradient(circle at 32% 28%,#fff 0,#bbb 7%,#444 22%,#111 60%,#000 100%);border:2px solid rgba(255,255,255,.5);box-shadow:0 0 28px rgba(30,144,255,.45);transition:transform .12s;transform:scale(.5)}
+#cur.big{transform:scale(.62)}
+.hide{display:none!important}
+@media(max-width:800px){header{padding:16px}main{padding:28px 16px}.layout{flex-direction:column}.side{width:auto;border:0;padding:0;flex-direction:row;flex-wrap:wrap}.splash h1{font-size:2rem}.logo{font-size:1.4rem}.btn{padding:9px 12px;font-size:.9rem}*{cursor:auto!important}#cur{display:none}}
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash">
+  <h1>Welcome to R and C's Copy Hub Website</h1>
+  <p>Thanks for stopping by! The site will be ready in just a moment.</p>
+  <b id="wait">Please wait 2s...</b>
+</div>
+
+<header>
+  <div class="logo">R&amp;CS Copy Hub</div>
+  <nav>
+    <button class="pill" id="who">Not signed in</button>
+    <button class="btn" data-page="home">Home</button>
+    <button class="btn" data-page="apk">APK Method Stuff</button>
+    <button class="btn unity" data-page="unity">Unity Stuff</button>
+    <button class="btn" id="burger" aria-label="Menu" style="padding:12px 16px;font-size:1.3rem">☰</button>
+    <div class="menu" id="menu">
+      <button style="color:#ff6fb5" data-act="booster">Get Booster Code</button>
+      <button style="color:#d6b13a" data-act="staff">Get Staff Code</button>
+      <button style="color:#4aa3ff" data-act="rename">Change Username</button>
+      <button style="color:#ff6b6b" data-act="logout">Log Out</button>
+    </div>
+  </nav>
+</header>
+
+<main id="app"></main>
+<footer>© R&amp;CS Copy Hub</footer>
+
+<!-- Sign in -->
+<div class="ov" id="signin"><div class="modal">
+  <h3>Sign In</h3>
+  <p>Sign in with Discord to unlock staff / booster access automatically.</p>
+  <button class="dbtn" id="discordLogin" style="width:auto">🎮 Login with Discord</button>
+  <div class="or">— or —</div>
+  <input id="uname" placeholder="Pick a username" maxlength="20" style="width:60%;display:block;margin:8px 0">
+  <button class="mbtn" id="cont">Continue without Discord</button>
+</div></div>
+
+<!-- Code entry -->
+<div class="ov" id="codeov"><div class="modal">
+  <h3 id="codeTitle">Enter code</h3>
+  <p id="codeHelp"></p>
+  <input id="codeIn" placeholder="Enter code">
+  <button class="mbtn" id="codeOk">Unlock</button>
+  <button class="mbtn alt" data-close>Cancel</button>
+</div></div>
+
+<!-- Add item -->
+<div class="ov" id="addov"><div class="modal">
+  <h3>Add item</h3>
+  <input id="aTitle" placeholder="Title">
+  <input id="aLink" placeholder="Link / download URL">
+  <input id="aImg" type="file" accept="image/*">
+  <textarea id="aCopy" rows="4" placeholder="Text to copy (optional)"></textarea>
+  <button class="mbtn" id="aSave">Publish</button>
+  <button class="mbtn alt" data-close>Cancel</button>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<div id="cur"></div>
+
+<script>
+/* ============ CONFIG — edit these ============ */
+const CONFIG = {
+  discordInvite: "https://discord.gg/ZMHModdingHub",
+  discordClientId: "",              // optional: add for real Discord OAuth (see README)
+  staffCodes: ["Zack8969"],   // staff can add/delete items
+  boosterCodes: ["TyForBoosting9845"], // booster unlock
+  sections: {
+    apk:   { title:"APK Method Stuff", tabs:["DLCs","Backends","APKs"], cls:"apk" },
+    unity: { title:"Unity Stuff",      tabs:["Scripts","Projects","Packages"], cls:"unity-p" }
+  }
+};
+/* ============================================= */
+
+const $ = s => document.querySelector(s);
+const load = (k,d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } };
+const save = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { toast("Storage full — use smaller images") } };
+let user = load("rcs_user", null);          // {name, staff, booster}
+let items = load("rcs_items", []);          // {id,section,tab,title,link,img,copy,ts}
+let state = { page:"home", tab:{apk:0,unity:0}, q:"", sort:"new" };
+
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",2200)}
+const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* splash */
+let n=2; const w=$("#wait");
+const iv=setInterval(()=>{n--; if(n>0){w.textContent=`Please wait ${n}s...`}else{clearInterval(iv);const s=$("#splash");s.style.opacity=0;setTimeout(()=>s.remove(),600);if(!user)open("#signin")}},1000);
+
+/* custom cursor */
+const cur=$("#cur");
+addEventListener("mousemove",e=>{cur.style.left=e.clientX+"px";cur.style.top=e.clientY+"px"});
+addEventListener("mousedown",()=>cur.classList.add("big"));
+addEventListener("mouseup",()=>cur.classList.remove("big"));
+
+function open(id){$(id).classList.add("open")}
+function closeAll(){document.querySelectorAll(".ov").forEach(o=>o.classList.remove("open"))}
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeAll);
+document.querySelectorAll(".ov").forEach(o=>o.addEventListener("mousedown",e=>{if(e.target===o&&o.id!=="signin")closeAll()}));
+
+/* header */
+function renderHeader(){
+  const who=$("#who");
+  who.innerHTML = user ? `<span class="av">${esc(user.name[0].toUpperCase())}</span>@${esc(user.name)}${user.staff?" 🛡️":""}${user.booster?" 💎":""}` : "Not signed in";
+  document.querySelectorAll("[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===state.page));
+}
+who_click:{ $("#who").onclick=()=>{ if(!user) open("#signin") } }
+document.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{state.page=b.dataset.page;state.q="";render();scrollTo(0,0)});
+$("#burger").onclick=e=>{e.stopPropagation();$("#menu").classList.toggle("open")};
+addEventListener("click",()=>$("#menu").classList.remove("open"));
+
+/* sign in */
+$("#cont").onclick=()=>{
+  const v=$("#uname").value.trim().replace(/[^\w.-]/g,"");
+  if(v.length<2) return toast("Pick a username (2+ characters)");
+  user={name:v,staff:false,booster:false}; save("rcs_user",user); closeAll(); render(); toast("Signed in as @"+v);
+};
+$("#uname").addEventListener("keydown",e=>e.key==="Enter"&&$("#cont").click());
+$("#discordLogin").onclick=()=>{
+  if(!CONFIG.discordClientId){ toast("Discord login isn't set up yet — use a username for now"); return }
+  const u=`https://discord.com/oauth2/authorize?client_id=${CONFIG.discordClientId}&response_type=token&scope=identify&redirect_uri=${encodeURIComponent(location.origin)}`;
+  location.href=u;
+};
+/* Discord implicit-flow return */
+(async()=>{
+  const h=new URLSearchParams(location.hash.slice(1)); const t=h.get("access_token");
+  if(!t) return;
+  try{
+    const r=await fetch("https://discord.com/api/users/@me",{headers:{Authorization:"Bearer "+t}});
+    const d=await r.json(); user={name:d.global_name||d.username,staff:false,booster:false,discord:true};
+    save("rcs_user",user); history.replaceState(null,"",location.pathname); render();
+  }catch{ toast("Discord sign-in failed") }
+})();
+
+/* menu actions */
+let codeMode="";
+document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{
+  const a=b.dataset.act;
+  if(a==="logout"){user=null;localStorage.removeItem("rcs_user");render();open("#signin");return}
+  if(!user){open("#signin");return toast("Sign in first")}
+  if(a==="rename"){const v=(prompt("New username:",user.name)||"").trim().replace(/[^\w.-]/g,"");if(v.length>=2){user.name=v;save("rcs_user",user);render()}return}
+  codeMode=a;
+  $("#codeTitle").textContent = a==="staff"?"Staff code":"Booster code";
+  $("#codeHelp").textContent = a==="staff"?"Enter a staff code to add and remove items.":"Boost the Discord server to receive a booster code.";
+  $("#codeIn").value=""; open("#codeov");
+});
+$("#codeOk").onclick=()=>{
+  const v=$("#codeIn").value.trim(); const list=codeMode==="staff"?CONFIG.staffCodes:CONFIG.boosterCodes;
+  if(list.includes(v)){user[codeMode==="staff"?"staff":"booster"]=true;save("rcs_user",user);closeAll();render();toast("Unlocked!")}
+  else toast("That code isn't valid");
+};
+
+/* add item */
+$("#aSave").onclick=async()=>{
+  const sec=state.page, tab=CONFIG.sections[sec].tabs[state.tab[sec]];
+  const title=$("#aTitle").value.trim(); if(!title) return toast("Add a title");
+  let img=""; const f=$("#aImg").files[0];
+  if(f){ img=await new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement("canvas"),s=Math.min(1,640/im.width);c.width=im.width*s;c.height=im.height*s;c.getContext("2d").drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.8))};im.src=r.result};r.readAsDataURL(f)}) }
+  items.push({id:Date.now(),section:sec,tab,title,link:$("#aLink").value.trim(),img,copy:$("#aCopy").value,ts:Date.now()});
+  save("rcs_items",items); closeAll(); ["#aTitle","#aLink","#aCopy"].forEach(s=>$(s).value="");$("#aImg").value=""; render(); toast("Published");
+};
+
+/* render */
+function render(){
+  renderHeader();
+  const app=$("#app");
+  if(state.page==="home"){
+    app.innerHTML=`<h1>Welcome</h1>
+    <p class="lead">Welcome to R&amp;CS Copy Hub. Browse custom Gorilla Tag content across our two hubs — APK Method Stuff for DLCs, backends and APKs, and Unity Stuff for scripts, projects and packages.</p>
+    <div class="card-box"><h2>Join our Discord</h2><p>Connect with the community, get staff applications, or boost the server to unlock Booster codes.</p>
+    <a class="dbtn" href="${esc(CONFIG.discordInvite)}" target="_blank" rel="noopener">Join Discord</a></div>`;
+    return;
+  }
+  const sec=CONFIG.sections[state.page], ti=state.tab[state.page], tab=sec.tabs[ti];
+  let list=items.filter(i=>i.section===state.page&&i.tab===tab&&i.title.toLowerCase().includes(state.q.toLowerCase()));
+  list.sort((a,b)=>state.sort==="new"?b.ts-a.ts:state.sort==="old"?a.ts-b.ts:a.title.localeCompare(b.title));
+  app.className=sec.cls;
+  app.innerHTML=`<h1>${sec.title}</h1>
+  <div class="layout"><div class="side">${sec.tabs.map((t,i)=>`<button class="tab ${i===ti?"on":""}" data-t="${i}">${t}</button>`).join("")}
+  ${user?.staff?`<button class="tab" id="addBtn" style="margin-top:14px">+ Add item</button>`:""}</div>
+  <div class="content"><div class="bar"><input id="q" placeholder="Search ${tab}..." value="${esc(state.q)}">
+  <select id="sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="az">A–Z</option></select>
+  ${list.length?`<span class="count">${list.length} item${list.length>1?"s":""}</span>`:""}</div>
+  ${list.length?`<div class="grid">${list.map(i=>`<div class="item" data-id="${i.id}"><div class="thumb">${i.img?`<img src="${i.img}" alt="">`:"📦"}</div><div class="t">${esc(i.title)}${user?.staff?` <a href="#" data-del="${i.id}" style="float:right;color:#ff6b6b;text-decoration:none">✕</a>`:""}</div></div>`).join("")}</div>`:`<div class="empty">Nothing here yet.</div>`}
+  </div></div>`;
+  app.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{state.tab[state.page]=+b.dataset.t;state.q="";render()});
+  const q=$("#q");q.oninput=()=>{state.q=q.value;const p=q.selectionStart;render();const nq=$("#q");nq.focus();nq.setSelectionRange(p,p)};
+  const s=$("#sort");s.value=state.sort;s.onchange=()=>{state.sort=s.value;render()};
+  const ab=$("#addBtn");if(ab)ab.onclick=()=>open("#addov");
+  app.querySelectorAll("[data-del]").forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();if(confirm("Delete this item?")){items=items.filter(x=>x.id!=a.dataset.del);save("rcs_items",items);render()}});
+  app.querySelectorAll(".item").forEach(c=>c.onclick=()=>{
+    const it=items.find(x=>x.id==c.dataset.id);
+    if(it.copy){navigator.clipboard?.writeText(it.copy).then(()=>toast("Copied to clipboard"))}
+    if(it.link){window.open(it.link,"_blank","noopener")}
+  });
+}
+render();
+</script>
+</body>
+</html>
