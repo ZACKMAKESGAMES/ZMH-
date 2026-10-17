@@ -63,10 +63,11 @@ class R{constructor(b,le){this.u=b;this.v=new DataView(b.buffer,b.byteOffset,b.b
 
 /* ---- serialized file ---- */
 function parseSF(u){
-  const r=new R(u,false);r.u32();r.u32();const ver=r.u32();let dataOff=r.u32();
+  const r=new R(u,false);r.u32();let fsz=r.u32();const ver=r.u32();let dataOff=r.u32();
   if(ver<15)throw Error("Serialized file version "+ver+" (Unity older than 5.5) isn't supported");
   const endian=r.u8();r.p+=3;
-  if(ver>=22){r.u32();r.i64();dataOff=r.i64();r.i64()}
+  if(ver>=22){r.u32();fsz=r.i64();dataOff=r.i64();r.i64()}
+  if(u.length<fsz)throw Error("File is incomplete ("+u.length+" of "+fsz+" bytes). If it is split into .split0, .split1 ... parts, select all parts together.")
   r.le=endian===0;
   const uv=r.cs(),plat=r.i32(),tt=!!r.u8(),tc=r.i32(),types=[];
   for(let i=0;i<tc;i++){
@@ -131,32 +132,121 @@ function writeBundle(B,edits){
   let h=hdr(0);const total=h.length+bi.length+off;h=hdr(total);
   const out=new Uint8Array(total);out.set(h);out.set(bi,h.length);let p=h.length+bi.length;outs.forEach(o=>{out.set(o,p);p+=o.length});return out}
 
-if(typeof module!=="undefined")module.exports={readBundle,writeBundle,parseSF,buildSF,lz4,lzma,textGet,textSet};
+
+/* ---- split files (level0.split0, level0.split1 ...) ---- */
+function mergeSplits(list){
+  const m=list.map(f=>{const x=/^(.*)\.split(\d+)$/i.exec(f.name);return x?{b:x[1],i:+x[2],d:f.data}:null});
+  if(m.some(x=>!x))throw Error("Select only .splitN parts together, or open a single normal file.");
+  if(new Set(m.map(x=>x.b)).size>1)throw Error("These parts belong to different files.");
+  m.sort((a,b)=>a.i-b.i);
+  m.forEach((x,i)=>{if(x.i!==i)throw Error("Missing part "+m[0].b+".split"+i+". Select all parts at once (Ctrl or Shift click).")});
+  const out=new Uint8Array(m.reduce((t,x)=>t+x.d.length,0));let p=0;m.forEach(x=>{out.set(x.d,p);p+=x.d.length});
+  return{name:m[0].b,data:out,parts:m.length}}
+
+/* ---- scene objects (GameObject / Transform), Unity 5.5+ layout ---- */
+function goParse(sf,d){const v=new DataView(d.buffer,d.byteOffset,d.byteLength),n=v.getInt32(0,sf.le);
+  if(n<0||n>20000||4+n*12+8>d.length)throw Error("bad GameObject");
+  const comps=[];let p=4;for(let i=0;i<n;i++){comps.push(v.getInt32(p,sf.le)===0?String(v.getBigInt64(p+4,sf.le)):null);p+=12}
+  p+=4;const ns=p,l=v.getUint32(p,sf.le);if(l>1024||p+4+l>d.length)throw Error("bad name");
+  const ne=(p+4+l+3)&~3;return{comps,name:dec.decode(d.subarray(p+4,p+4+l)),ns,ne,ap:ne+2,active:d[ne+2]!==0}}
+function goSetName(sf,d,g,name){const b=enc.encode(name),pad=(4-b.length%4)%4,tail=d.subarray(g.ne),o=new Uint8Array(g.ns+4+b.length+pad+tail.length);
+  o.set(d.subarray(0,g.ns));new DataView(o.buffer).setUint32(g.ns,b.length,sf.le);o.set(b,g.ns+4);o.set(tail,g.ns+4+b.length+pad);return o}
+function trParse(sf,d){const v=new DataView(d.buffer,d.byteOffset,d.byteLength),le=sf.le,f=o=>v.getFloat32(o,le);
+  if(d.length<68)throw Error("bad Transform");
+  const gp=v.getInt32(0,le)===0?String(v.getBigInt64(4,le)):"",n=v.getInt32(52,le);
+  if(n<0||n>100000||56+n*12+12>d.length)throw Error("bad Transform");
+  const ch=[];for(let i=0;i<n;i++){const q=56+i*12;if(v.getInt32(q,le)===0)ch.push(String(v.getBigInt64(q+4,le)))}
+  const fp=56+n*12,fa=v.getInt32(fp,le)===0?String(v.getBigInt64(fp+4,le)):"0";
+  return{gp,rot:[f(12),f(16),f(20),f(24)],pos:[f(28),f(32),f(36)],scl:[f(40),f(44),f(48)],ch,fa}}
+function e2q(x,y,z){const r=Math.PI/360,sx=Math.sin(x*r),cx=Math.cos(x*r),sy=Math.sin(y*r),cy=Math.cos(y*r),sz=Math.sin(z*r),cz=Math.cos(z*r);
+  return[cy*sx*cz+sy*cx*sz,sy*cx*cz-cy*sx*sz,cy*cx*sz-sy*sx*cz,cy*cx*cz+sy*sx*sz]}
+function q2e(q){let[x,y,z,w]=q;const n=Math.hypot(x,y,z,w)||1;x/=n;y/=n;z/=n;w/=n;
+  const r12=2*(y*z-x*w),d=180/Math.PI;let ex,ey,ez;
+  if(Math.abs(r12)<0.999999){ex=Math.asin(-r12);ey=Math.atan2(2*(x*z+y*w),1-2*(x*x+y*y));ez=Math.atan2(2*(x*y+z*w),1-2*(x*x+z*z))}
+  else{ex=r12<0?Math.PI/2:-Math.PI/2;ey=Math.atan2(-2*(x*z-y*w),1-2*(y*y+z*z));ez=0}
+  return[ex*d,ey*d,ez*d].map(a=>((a%360)+360)%360)}
+if(typeof module!=="undefined")module.exports={readBundle,writeBundle,parseSF,buildSF,lz4,lzma,textGet,textSet,mergeSplits,goParse,goSetName,trParse,e2q,q2e};
 
 /* ---- UI ---- */
-let B=null,ed=new Map(),uq="",up=0,txA=null;const PG=100;
+let B=null,ed=new Map(),uq="",up=0,txA=null,view="assets",sfi=0,sel="",ex=new Set(),sq="";const PG=100;
 const dl=(data,name)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/octet-stream"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)};
 const assets=()=>{const A=[];B.files.forEach((f,fi)=>f.sf&&f.sf.objs.forEach(o=>A.push({fi,o,k:fi+":"+o.pid})));return A};
 const bytes=a=>ed.get(a.k)||B.files[a.fi].sf.raw.subarray(a.o.off,a.o.off+a.o.sz);
+const r3=x=>String(Math.round(x*1000)/1000);
+function sceneOf(fi){
+  const sf=B.files[fi].sf,G=new Map(),T=new Map(),by=new Map();
+  const rd=o=>ed.get(fi+":"+o.pid)||sf.raw.subarray(o.off,o.off+o.sz);
+  for(const o of sf.objs){by.set(String(o.pid),o);
+    try{if(o.cid===1)G.set(String(o.pid),{o,...goParse(sf,rd(o))});else if(o.cid===4||o.cid===224)T.set(String(o.pid),{o,...trParse(sf,rd(o))})}catch(e){}}
+  const roots=[...T.keys()].filter(k=>{const f=T.get(k).fa;return f==="0"||!T.has(f)});
+  return{sf,G,T,by,roots,rd}}
+function sceneHTML(){
+  const fis=B.files.map((f,i)=>f.sf&&f.sf.objs.some(o=>o.cid===1)?i:-1).filter(i=>i>=0);
+  if(!fis.length)return`<div class="empty">No GameObjects found in this file. Open a level or scene file (like level0) to see a hierarchy.</div>`;
+  if(!fis.includes(sfi))sfi=fis[0];
+  const sc=sceneOf(sfi),rows=[];
+  const walk=(tid,d)=>{const t=sc.T.get(tid);if(!t||rows.length>3000||d>64)return;rows.push({tid,d,t,g:sc.G.get(t.gp)});if(ex.has(tid))t.ch.forEach(c=>walk(c,d+1))};
+  if(sq){for(const[tid,t]of sc.T){const g=sc.G.get(t.gp);if(g&&g.name.toLowerCase().includes(sq)&&rows.length<3000)rows.push({tid,d:0,t,g})}}else sc.roots.forEach(r=>walk(r,0));
+  const tree=rows.map(({tid,d,t,g})=>`<div class="srow ${tid===sel?"on":""}" data-s="${tid}" style="padding-left:${12+d*18}px"><span class="car" data-x="${tid}">${t.ch.length&&!sq?(ex.has(tid)?"▼":"▶"):"•"}</span>${esc(g?g.name:"(no GameObject)")}${g&&!g.active?" <i style='color:#888'>(inactive)</i>":""}</div>`).join("");
+  let insp=`<div class="empty" style="margin:0;padding:30px;font-size:1.05rem">Select an object in the hierarchy.</div>`;
+  const t=sc.T.get(sel),g=t&&sc.G.get(t.gp);
+  if(t&&g){const e=q2e(t.rot),inp=(id,v)=>`<input class="vi" id="${id}" value="${r3(v)}" data-o="${r3(v)}">`;
+    insp=`<h3 style="margin:0 0 12px">${esc(g.name)}</h3><div>Name <input class="vi" id="gn" style="width:70%" value="${esc(g.name)}" data-o="${esc(g.name)}"> <label><input type="checkbox" id="ga" ${g.active?"checked":""}> Active</label></div>
+    <p class="count" style="margin:14px 0 4px">Position</p>${t.pos.map((v,i)=>inp("p"+i,v)).join("")}
+    <p class="count" style="margin:10px 0 4px">Rotation (degrees)</p>${e.map((v,i)=>inp("r"+i,v)).join("")}
+    <p class="count" style="margin:10px 0 4px">Scale</p>${t.scl.map((v,i)=>inp("c"+i,v)).join("")}
+    <p class="count" style="margin:14px 0 4px">Components</p><div style="font-size:.95rem">${g.comps.map(c=>{const o=c&&sc.by.get(c);return`<div>${o?esc(o.type)+(o.name?" ("+esc(o.name)+")":"")+" <span class='count'>#"+c+"</span>":"(external)"}</div>`}).join("")}</div>
+    <button class="btn" id="sapply" style="margin-top:16px">Apply changes</button>`}
+  return`<div class="bar" style="margin-top:14px">${fis.length>1?`<select id="sfs">${fis.map(i=>`<option value="${i}" ${i===sfi?"selected":""}>${esc(B.files[i].path)}</option>`).join("")}</select>`:""}<input id="sqi" placeholder="Search objects by name..." value="${esc(sq)}"><button class="btn" data-v="xa">Expand all</button><button class="btn" data-v="ca">Collapse all</button></div>
+  <div class="scene"><div class="tree">${tree||"<div class='count' style='padding:14px'>Nothing matches.</div>"}</div><div class="insp">${insp}</div></div>`}
+function applySel(){
+  const sc=sceneOf(sfi),t=sc.T.get(sel),g=t&&sc.G.get(t.gp);if(!t||!g)return;
+  const sf=sc.sf,ch=(id)=>{const e=$("#"+id);return e.value!==e.dataset.o};
+  let d=sc.rd(t.o).slice(),dv=new DataView(d.buffer),dirty=false;
+  for(let i=0;i<3;i++){
+    if(ch("p"+i)){dv.setFloat32(28+i*4,parseFloat($("#p"+i).value)||0,sf.le);dirty=true}
+    if(ch("c"+i)){dv.setFloat32(40+i*4,parseFloat($("#c"+i).value)||0,sf.le);dirty=true}}
+  if([0,1,2].some(i=>ch("r"+i))){const q=e2q(...[0,1,2].map(i=>parseFloat($("#r"+i).value)||0));q.forEach((v,i)=>dv.setFloat32(12+i*4,v,sf.le));dirty=true}
+  if(dirty)ed.set(sfi+":"+t.o.pid,d);
+  let gd=sc.rd(g.o),gdirty=false;const act=$("#ga").checked;
+  if(act!==g.active){gd=gd.slice();gd[g.ap]=act?1:0;gdirty=true}
+  const nm=$("#gn").value;if(nm!==g.name){gd=goSetName(sf,gd,goParse(sf,gd),nm);gdirty=true}
+  if(gdirty)ed.set(sfi+":"+g.o.pid,gd);
+  toast(dirty||gdirty?"Staged. Download the modified file to apply.":"No changes");ubody()}
 G.renderUabe=function(){
-  $("#app").innerHTML=`<h1>UABEA Editor</h1><p class="lead" style="font-size:1.05rem">Open a Unity asset bundle (.unity3d, .bundle, .assetbundle) or .assets file. Browse assets, export or replace them, edit TextAssets, then download the modified bundle. Everything stays in your browser.</p><div class="bar" style="margin:20px 0"><input type="file" id="uf"><button class="btn" id="usave" disabled>Download Modified Bundle</button></div><div id="ubody"></div>`;
-  $("#uf").onchange=async e=>{const f=e.target.files[0];if(!f)return;
-    try{toast("Reading file...");B=readBundle(await f.arrayBuffer());B.name=f.name;ed.clear();uq="";up=0;$("#usave").disabled=false;ubody()}
-    catch(x){B=null;$("#usave").disabled=true;$("#ubody").innerHTML=`<div class="empty">${esc(x.message)}</div>`}};
-  $("#usave").onclick=()=>{if(!B)return;try{dl(writeBundle(B,ed),"modified_"+B.name);toast("Downloading modified bundle")}catch(x){toast("Save failed: "+x.message)}};
+  $("#app").innerHTML=`<h1>UABEA Editor</h1><p class="lead" style="font-size:1.05rem">Open a Unity asset bundle, .assets file, or level file. For split files (level0.split0, level0.split1 ...) select <b>all parts at once</b> and they are merged into the main file. Browse assets, edit the scene hierarchy, then download the modified file. Everything stays in your browser.</p><div class="bar" style="margin:20px 0;flex-wrap:wrap"><input type="file" id="uf" multiple><button class="btn" id="umerge" disabled>Download Merged File</button><button class="btn" id="usave" disabled>Download Modified File</button></div><div id="ubody"></div>`;
+  $("#uf").onchange=async e=>{const fl=[...e.target.files];if(!fl.length)return;const split=fl.some(f=>/\.split\d+$/i.test(f.name));
+    try{toast("Reading...");let name,data,parts=0;
+      if(split){const m=mergeSplits(await Promise.all(fl.map(async f=>({name:f.name,data:new Uint8Array(await f.arrayBuffer())}))));name=m.name;data=m.data;parts=m.parts}
+      else{name=fl[0].name;data=new Uint8Array(await fl[0].arrayBuffer())}
+      B=readBundle(data);B.name=name;B.parts=parts;B.merged=data;ed.clear();uq="";up=0;sel="";ex.clear();sq="";view=B.files.some(f=>f.sf&&f.sf.objs.some(o=>o.cid===1))&&B.kind==="serialized"?"scene":"assets";
+      $("#usave").disabled=false;$("#umerge").disabled=!parts;ubody();if(parts)toast("Merged "+parts+" parts into "+name)}
+    catch(x){B=null;$("#usave").disabled=true;$("#umerge").disabled=true;$("#ubody").innerHTML=`<div class="empty">${esc(x.message)}${split&&fl.length===1?" If this file has more parts (.split1, .split2 ...), select them all at once with Ctrl or Shift click.":""}</div>`}};
+  $("#usave").onclick=()=>{if(!B)return;try{dl(writeBundle(B,ed),B.kind==="serialized"?B.name:"modified_"+B.name);toast("Downloading modified file")}catch(x){toast("Save failed: "+x.message)}};
+  $("#umerge").onclick=()=>{if(B&&B.parts)dl(B.merged,B.name)};
   $("#txok").onclick=()=>{if(!txA)return;try{const f=B.files[txA.fi];ed.set(txA.k,textSet(f.sf,bytes(txA),$("#txa").value));closeAll();ubody();toast("Text applied")}catch(x){toast(x.message)}};
-  if(B){$("#usave").disabled=false;ubody()}
+  if(B){$("#usave").disabled=false;$("#umerge").disabled=!B.parts;ubody()}
 };
 function ubody(){
-  const A=assets(),q=uq.toLowerCase(),L=A.filter(a=>!q||(a.o.name+" "+a.o.type+" "+a.o.pid).toLowerCase().includes(q));
-  const pages=Math.max(1,Math.ceil(L.length/PG));up=Math.min(up,pages-1);
-  const errs=B.files.filter(f=>f.err).map(f=>f.path+": "+f.err);
-  $("#ubody").innerHTML=`<p class="count" style="margin:0 0 10px">${B.kind==="bundle"?"UnityFS, Unity "+esc(B.uv):"Serialized file"} · ${B.files.length} file(s) · ${A.length} assets · ${ed.size} changed</p>${errs.length?`<div class="empty" style="margin:10px 0;padding:18px;font-size:1rem">${esc(errs.join("; "))}</div>`:""}<div class="count" style="margin:6px 0 14px">Files (click to export): ${B.files.map((f,i)=>`<a href="#" data-a="f" data-i="${i}" style="color:var(--acc)">${esc(f.path)}</a>`).join(" · ")}</div><div class="bar"><input id="uqi" placeholder="Search name, type or path ID..." value="${esc(uq)}"><button class="btn" id="upv">Prev</button><span class="count">Page ${up+1} / ${pages}</span><button class="btn" id="unx">Next</button></div><div style="margin-top:14px">${L.slice(up*PG,up*PG+PG).map(a=>`<div class="arow ${ed.has(a.k)?"ch":""}"><b>${esc(a.o.name||"(no name)")}</b><span>${esc(a.o.type)}</span><span>${a.o.pid}</span><span>${bytes(a).length.toLocaleString()} B</span><span><button class="btn sm" data-a="x" data-k="${a.k}">Export</button> <button class="btn sm" data-a="i" data-k="${a.k}">Import</button>${a.o.cid===49?` <button class="btn sm" data-a="t" data-k="${a.k}">Edit text</button>`:""}${ed.has(a.k)?` <button class="btn sm" data-a="u" data-k="${a.k}">Undo</button>`:""}</span></div>`).join("")}</div>`;
-  const qi=$("#uqi");qi.oninput=()=>{uq=qi.value;up=0;const c=qi.selectionStart;ubody();const n=$("#uqi");n.focus();n.setSelectionRange(c,c)};
-  $("#upv").onclick=()=>{if(up>0){up--;ubody()}};$("#unx").onclick=()=>{if(up<pages-1){up++;ubody()}};
-  $("#ubody").onclick=e=>{const t=e.target.closest("[data-a]");if(!t)return;e.preventDefault();const a=t.dataset.a;
+  const A=assets(),errs=B.files.filter(f=>f.err).map(f=>f.path+": "+f.err);
+  const head=`<p class="count" style="margin:0 0 10px">${B.kind==="bundle"?"UnityFS, Unity "+esc(B.uv):"Serialized file "+esc(B.name)+(B.parts?" (merged from "+B.parts+" parts)":"")} · ${B.files.length} file(s) · ${A.length} assets · ${ed.size} changed</p>${errs.length?`<div class="empty" style="margin:10px 0;padding:18px;font-size:1rem">${esc(errs.join("; "))}</div>`:""}<div class="bar" style="gap:10px"><button class="btn ${view==="assets"?"active":""}" data-v="assets">Assets</button><button class="btn ${view==="scene"?"active":""}" data-v="scene">Scene Hierarchy</button></div>`;
+  let body="",L=[],pages=1;
+  if(view==="scene")body=sceneHTML();
+  else{const q=uq.toLowerCase();L=A.filter(a=>!q||(a.o.name+" "+a.o.type+" "+a.o.pid).toLowerCase().includes(q));pages=Math.max(1,Math.ceil(L.length/PG));up=Math.min(up,pages-1);
+    body=`<div class="count" style="margin:14px 0">Files (click to export): ${B.files.map((f,i)=>`<a href="#" data-a="f" data-i="${i}" style="color:var(--acc)">${esc(f.path)}</a>`).join(" · ")}</div><div class="bar"><input id="uqi" placeholder="Search name, type or path ID..." value="${esc(uq)}"><button class="btn" id="upv">Prev</button><span class="count">Page ${up+1} / ${pages}</span><button class="btn" id="unx">Next</button></div><div style="margin-top:14px">${L.slice(up*PG,up*PG+PG).map(a=>`<div class="arow ${ed.has(a.k)?"ch":""}"><b>${esc(a.o.name||"(no name)")}</b><span>${esc(a.o.type)}</span><span>${a.o.pid}</span><span>${bytes(a).length.toLocaleString()} B</span><span><button class="btn sm" data-a="x" data-k="${a.k}">Export</button> <button class="btn sm" data-a="i" data-k="${a.k}">Import</button>${a.o.cid===49?` <button class="btn sm" data-a="t" data-k="${a.k}">Edit text</button>`:""}${ed.has(a.k)?` <button class="btn sm" data-a="u" data-k="${a.k}">Undo</button>`:""}</span></div>`).join("")}</div>`}
+  $("#ubody").innerHTML=head+body;
+  const refocus=(id,set)=>{const i=$("#"+id);i.oninput=()=>{set(i.value);const c=i.selectionStart;ubody();const n=$("#"+id);n.focus();n.setSelectionRange(c,c)}};
+  if(view==="assets"){refocus("uqi",v=>{uq=v;up=0});$("#upv").onclick=()=>{if(up>0){up--;ubody()}};$("#unx").onclick=()=>{if(up<pages-1){up++;ubody()}}}
+  else{const si=$("#sqi");if(si)refocus("sqi",v=>{sq=v.toLowerCase()});const fs=$("#sfs");if(fs)fs.onchange=()=>{sfi=+fs.value;sel="";ubody()}}
+  $("#ubody").onclick=e=>{
+    const v=e.target.closest("[data-v]");if(v){const k=v.dataset.v;
+      if(k==="xa"||k==="ca"){const sc=sceneOf(sfi);ex=k==="xa"?new Set([...sc.T.keys()].filter(i=>sc.T.get(i).ch.length)):new Set()}else view=k;return ubody()}
+    const x=e.target.closest("[data-x]");if(x){const id=x.dataset.x;ex.has(id)?ex.delete(id):ex.add(id);return ubody()}
+    const s=e.target.closest("[data-s]");if(s){sel=s.dataset.s;return ubody()}
+    if(e.target.id==="sapply")return applySel();
+    const t=e.target.closest("[data-a]");if(!t)return;e.preventDefault();const a=t.dataset.a;
     if(a==="f"){const f=B.files[+t.dataset.i];return dl(f.data,f.path.split("/").pop())}
-    const A2=assets().find(x=>x.k===t.dataset.k);if(!A2)return;
+    const A2=assets().find(z=>z.k===t.dataset.k);if(!A2)return;
     if(a==="x")dl(bytes(A2),(A2.o.name||A2.o.pid)+"."+A2.o.type+".dat");
     else if(a==="u"){ed.delete(A2.k);ubody()}
     else if(a==="i"){const inp=document.createElement("input");inp.type="file";inp.onchange=async()=>{if(inp.files[0]){ed.set(A2.k,new Uint8Array(await inp.files[0].arrayBuffer()));ubody();toast("Replacement staged. Download to apply.")}};inp.click()}
