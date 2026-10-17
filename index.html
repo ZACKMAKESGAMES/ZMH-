@@ -78,6 +78,10 @@ h1,.apk h1,.unity-p h1{border-color:var(--acc)}
 .item:hover,.btn:hover{border-color:var(--acc)}
 #cur.img{background:center/contain no-repeat;border:0;box-shadow:none;border-radius:0;transform:none}
 #cur.img.big{transform:scale(.88)}
+.arow{display:grid;grid-template-columns:2fr 1.2fr 1.4fr .9fr 2.6fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:6px 0;background:var(--panel);font-size:.95rem;overflow-wrap:anywhere}
+.arow.ch{border-color:var(--green)}
+.sm{padding:6px 12px!important;font-size:.85rem!important}
+@media(max-width:800px){.arow{grid-template-columns:1fr}}
 .hide{display:none!important}
 @media(max-width:800px){header{padding:16px}main{padding:28px 16px}.layout{flex-direction:column}.side{width:auto;border:0;padding:0;flex-direction:row;flex-wrap:wrap}.splash h1{font-size:2rem}.logo{font-size:1.4rem}.btn{padding:9px 12px;font-size:.9rem}*{cursor:auto!important}#cur{display:none}}
 </style>
@@ -98,6 +102,7 @@ h1,.apk h1,.unity-p h1{border-color:var(--acc)}
     <button class="btn" data-page="apk">Modding Tools</button>
     <button class="btn unity" data-page="unity">More Tools</button>
     <button class="btn" data-page="meta">Metadata Editor</button>
+    <button class="btn" data-page="uabe">UABEA Editor</button>
     <button class="btn" data-page="settings">Settings</button>
     <button class="btn" id="burger" aria-label="Menu" style="padding:12px 16px;font-size:1.3rem">☰</button>
     <div class="menu" id="menu">
@@ -142,16 +147,15 @@ h1,.apk h1,.unity-p h1{border-color:var(--acc)}
   <button class="mbtn alt" data-close>Cancel</button>
 </div></div>
 
+<div class="ov" id="txov"><div class="modal" style="text-align:left"><h3 id="txt">Edit text</h3><textarea id="txa" rows="16" style="font-family:Consolas,monospace"></textarea><button class="mbtn" id="txok">Apply</button><button class="mbtn alt" data-close>Cancel</button></div></div>
 <div class="toast" id="toast"></div>
 <div id="cur"></div>
 
 <script>
 /* ============ CONFIG — edit these ============ */
 const CONFIG = {
-  discordInvite: "https://discord.gg/tBCjc6jgD6",
-  discordClientId: "https://discord.gg/tBCjc6jgD6",              // optional: add for real Discord OAuth (see README)
-  staffCodes: ["Zack8969"],   // staff can add/delete items
-  boosterCodes: ["Boosterstuff226"], // booster unlock
+  discordInvite: "https://discord.gg/YOUR_INVITE",
+  discordClientId: "",              // optional: add for real Discord OAuth (see README)
   sections: {
     apk:   { title:"Modding Tools", tabs:["Modded Apks","Libs","Meta Data Method"], cls:"apk" },
     unity: { title:"More Tools",      tabs:["Scripts","Projects","Packages"], cls:"unity-p" }
@@ -230,11 +234,19 @@ document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{
   $("#codeHelp").textContent = a==="staff"?"Enter a staff code to add and remove items.":"Boost the Discord server to receive a booster code.";
   $("#codeIn").value=""; open("#codeov");
 });
-$("#codeOk").onclick=()=>{
-  const v=$("#codeIn").value.trim(); const list=codeMode==="staff"?CONFIG.staffCodes:CONFIG.boosterCodes;
-  if(list.includes(v)){user[codeMode==="staff"?"staff":"booster"]=true;if(codeMode==="staff")user.sc=v;save("rcs_user",user);closeAll();render();toast("Unlocked!")}
-  else toast("That code isn't valid");
+$("#codeOk").onclick=async()=>{
+  const v=$("#codeIn").value.trim();if(!v)return;
+  try{
+    const r=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:codeMode,code:v})});
+    if(r.ok){user[codeMode==="staff"?"staff":"booster"]=true;if(codeMode==="staff")user.sc=v;save("rcs_user",user);closeAll();render();toast("Unlocked!")}
+    else toast(r.status===503?"Server isn't set up yet (see setup)":"Invalid code, or too many tries. Wait 15 minutes.");
+  }catch{toast("Couldn't reach the server")}
 };
+(async()=>{ // re-verify saved staff access on every visit
+  if(!user?.staff)return;
+  try{const r=await fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"staff",code:user.sc||""})});
+    if(r.status===401){user.staff=false;delete user.sc;save("rcs_user",user);render()}}catch{}
+})();
 
 /* add item */
 $("#aSave").onclick=async()=>{
@@ -256,6 +268,7 @@ function render(){
   $("#app").className="";
   if(state.page==="settings")return renderSettings();
   if(state.page==="meta")return renderMeta();
+  if(state.page==="uabe")return renderUabe();
   if(state.page==="home"){
     app.innerHTML=`<h1>Welcome</h1>
     <p class="lead">Welcome to ZMH Modding Hub. Browse Modding Tools for modded APKs, libs and metadata methods, More Tools for scripts, projects and packages, and edit global-metadata.dat files right in your browser.</p>
@@ -406,5 +419,6 @@ loadItems();setInterval(loadItems,30000);
 document.querySelectorAll("[data-page]").forEach(b=>b.addEventListener("click",()=>loadItems(true)));
 render();
 </script>
+<script src="uabe.js"></script>
 </body>
 </html>
