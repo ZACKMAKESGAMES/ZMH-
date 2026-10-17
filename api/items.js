@@ -1,6 +1,4 @@
-const U = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const T = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const db = cmd => fetch(U, { method: "POST", headers: { Authorization: "Bearer " + T }, body: JSON.stringify(cmd) }).then(r => r.json()).then(r => r.result);
+const { db, U, staffOk } = require("./_lib");
 const str = (v, n) => String(v || "").slice(0, n);
 
 module.exports = async (req, res) => {
@@ -10,8 +8,7 @@ module.exports = async (req, res) => {
     const all = (await db(["HVALS", "zmh:items"])) || [];
     return res.json({ items: all.map(x => JSON.parse(x)) });
   }
-  const code = process.env.STAFF_CODE;
-  if (!code || req.headers["x-staff-code"] !== code) return res.status(401).json({ error: "Staff only" });
+  if (!(await staffOk(req))) return res.status(401).json({ error: "Staff only" });
   if (req.method === "POST") {
     const b = req.body || {};
     if (!["apk", "unity"].includes(b.section) || !str(b.title, 100).trim()) return res.status(400).json({ error: "Bad item" });
